@@ -14,7 +14,7 @@ __status__     = "Development"
 
 import json
 from urllib.request import urlopen, urlretrieve
-from os.path import expanduser, splitext, isfile, realpath
+from os.path import splitext, isfile, realpath
 from PIL import Image
 from datetime import datetime
 from pytz import timezone
