@@ -73,57 +73,61 @@ def apodpy(api_key):
     if isfile(jsonpath):
         print("I have today's APOD")
         print(jsonpath)
+        return
 
-    else:
-        print("I am fetching today's APOD manifest")
-        response_text = ''
+    if isfile(jsonpath + '.noimage'):
+        print("Today's APOD didn't work")
+        return fallback(basepath)
 
-        try:
-            url = 'https://api.nasa.gov/planetary/apod?api_key={}&date={}&hd=True'
-            response = urlopen(url.format(api_key, date_string))
-            response_text = response.readall().decode('utf-8')
+    print("I am fetching today's APOD manifest")
+    response_tex = ''
+    try:
+        url = 'https://api.nasa.gov/planetary/apod?api_key={}&date={}&hd=True'
+        response = urlopen(url.format(api_key, date_string))
+        response_text = response.readall().decode('utf-8')
 
-        except URLError:
-            print('Fetch failed')
-            fallback(basepath)
+    except URLError:
+        print('Fetch failed')
+        return fallback(basepath)
 
-        data = json.loads(response_text)
+    data = json.loads(response_text)
 
-        print('I got a response: {} ({} US/Eastern)'.format(data['title'], data['date']))
+    print('I got a response: {} ({} US/Eastern)'.format(data['title'], data['date']))
 
-        imurl = data['hdurl'] if 'hdurl' in data.keys() else data['url']
+    imurl = data['hdurl'] if 'hdurl' in data.keys() else data['url']
 
-        imex = splitext(imurl)[1]
-        data['imagepath'] = todaypath + '.original' + imex
-        data['wallpath'] = todaypath + '.wall' + imex
-        data['thumbpath'] = todaypath + '.thumb' + imex
+    imex = splitext(imurl)[1]
+    data['imagepath'] = todaypath + '.original' + imex
+    data['wallpath'] = todaypath + '.wall' + imex
+    data['thumbpath'] = todaypath + '.thumb' + imex
 
-        try:
-            print('I am getting the image from ' + imurl)
-            urlretrieve(imurl, data['imagepath'])
-            print('I have saved it at ' + data['imagepath'])
+    try:
+        print('I am getting the image from ' + imurl)
+        urlretrieve(imurl, data['imagepath'])
+        print('I have saved it at ' + data['imagepath'])
 
-            im = Image.open(data['imagepath'])
-            im = im_create_wp(im, 16, 9)
-            im.save(data['wallpath'])
-            print('I have saved a wallpaper copy at ' + data['wallpath'])
+        im = Image.open(data['imagepath'])
+        im = im_create_wp(im, 16, 9)
+        im.save(data['wallpath'])
+        print('I have saved a wallpaper copy at ' + data['wallpath'])
 
-            im = Image.open(data['imagepath'])
-            size = 128, 128
-            im.thumbnail(size)
-            im.save(data['thumbpath'])
-            print('I have saved a thumbnail at ' + data['thumbpath'])
+        im = Image.open(data['imagepath'])
+        size = 128, 128
+        im.thumbnail(size)
+        im.save(data['thumbpath'])
+        print('I have saved a thumbnail at ' + data['thumbpath'])
 
-        except OSError:
-            print('There is something wrong with the image file, perhaps it is not an image')
+    except OSError:
+        print('There is something wrong with the image file, perhaps it is not an image')
 
-            for f in data['imagepath'], data['wallpath'], data['thumbpath']:
-                if isfile(f):
-                    print('Removing ' + f)
-                    remove(f)
-            
-            fallback(basepath)
-            return
+        for f in data['imagepath'], data['wallpath'], data['thumbpath']:
+            if isfile(f):
+                print('Removing ' + f)
+                remove(f)
+
+        print('Saving APOD manifest with no images')
+        json.dump(data, open(jsonpath + '.noimage', 'w'))
+        return fallback(basepath)
 
         print('Saving APOD manifest with local images')
         json.dump(data, open(jsonpath, 'w'))
