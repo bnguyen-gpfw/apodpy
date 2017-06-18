@@ -14,7 +14,10 @@ __status__     = "Development"
 
 import json
 from urllib.request import urlopen, urlretrieve
-from os.path import splitext, isfile, realpath
+from urllib.error import URLError
+from os.path import splitext, isfile, realpath, getctime
+from os import remove
+from glob import iglob
 from PIL import Image
 from datetime import datetime
 from pytz import timezone
@@ -43,54 +46,93 @@ def im_create_wp(im, aspect_width, aspect_height):
     return im
 
 
+# fall back on the most recent json
+def fallback(basepath):
+    try:
+        newest = max(iglob(basepath + '*.json'), key=getctime)
+        print('Here is an old one you can use instead')
+        print(newest)
+        return
+
+    except ValueError:
+        print('There is no fallback :(')
+        return
+
+
+# do the thing
+def apodpy(api_key):
+    #set date at US Eastern Standard so we are in sync with the API
+    #this is because of an error in the API
+    date_string = datetime.now(timezone('US/Eastern')).strftime('%Y-%m-%d')
+
+    basepath = realpath(__file__)
+    basepath = basepath[0:basepath.rfind('/') + 1]
+    todaypath = basepath + date_string
+    jsonpath = todaypath + '.json'
+
+    if isfile(jsonpath):
+        print("I have today's APOD")
+        print(jsonpath)
+
+    else:
+        print("I am fetching today's APOD manifest")
+        response_text = ''
+
+        try:
+            url = 'https://api.nasa.gov/planetary/apod?api_key={}&date={}&hd=True'
+            response = urlopen(url.format(api_key, date_string))
+            response_text = response.readall().decode('utf-8')
+
+        except URLError:
+            print('Fetch failed')
+            fallback(basepath)
+
+        data = json.loads(response_text)
+
+        print('I got a response: {} ({} US/Eastern)'.format(data['title'], data['date']))
+
+        imurl = data['hdurl'] if 'hdurl' in data.keys() else data['url']
+
+        imex = splitext(imurl)[1]
+        data['imagepath'] = todaypath + '.original' + imex
+        data['wallpath'] = todaypath + '.wall' + imex
+        data['thumbpath'] = todaypath + '.thumb' + imex
+
+        try:
+            print('I am getting the image from ' + imurl)
+            urlretrieve(imurl, data['imagepath'])
+            print('I have saved it at ' + data['imagepath'])
+
+            im = Image.open(data['imagepath'])
+            im = im_create_wp(im, 16, 9)
+            im.save(data['wallpath'])
+            print('I have saved a wallpaper copy at ' + data['wallpath'])
+
+            im = Image.open(data['imagepath'])
+            size = 128, 128
+            im.thumbnail(size)
+            im.save(data['thumbpath'])
+            print('I have saved a thumbnail at ' + data['thumbpath'])
+
+        except OSError:
+            print('There is something wrong with the image file, perhaps it is not an image')
+
+            for f in data['imagepath'], data['wallpath'], data['thumbpath']:
+                if isfile(f):
+                    print('Removing ' + f)
+                    remove(f)
+            
+            fallback(basepath)
+            return
+
+        print('Saving APOD manifest with local images')
+        json.dump(data, open(jsonpath, 'w'))
+        print(jsonpath)
+        return
+
+
 # APOD API https://api.nasa.gov/api.html#apod
 # DEMO_KEY or get a key from https://api.nasa.gov/index.html#apply-for-an-api-key
 api_key = 'DEMO_KEY'
-
-#set date at US Eastern Standard so we are in sync with the API
-#this is because of an error in the API
-date_string = datetime.now(timezone('US/Eastern')).strftime('%Y-%m-%d')
-
-basepath = realpath(__file__)
-basepath = basepath[0:basepath.rfind('/') + 1]
-todaypath = basepath + date_string
-jsonpath = todaypath + '.json'
-
-
-if isfile(jsonpath):
-    print("I have today's APOD")
-    print(jsonpath)
-
-else:
-    print("I am fetching today's APOD manifest")
-    url = 'https://api.nasa.gov/planetary/apod?api_key={}&date={}&hd=True'
-    response = urlopen(url.format(api_key, date_string))
-    response_text = response.readall().decode('utf-8')
-    data = json.loads(response_text)
-
-    print('I got a response: {} ({} US/Eastern)'.format(data['title'], data['date']))
-
-    imex = splitext(data['hdurl'])[1]
-    data['imagepath'] = todaypath + '.original' + imex
-    data['wallpath'] = todaypath + '.wall' + imex
-    data['thumbpath'] = todaypath + '.thumb' + imex
-
-    print('I am getting the image from ' + data['hdurl'])
-    urlretrieve(data['hdurl'], data['imagepath'])
-    print('I have saved it at ' + data['imagepath'])
-
-    im = Image.open(data['imagepath'])
-    im = im_create_wp(im, 16, 9)
-    im.save(data['wallpath'])
-    print('I have saved a wallpaper copy at ' + data['wallpath'])
-
-    im = Image.open(data['imagepath'])
-    size = 128, 128
-    im.thumbnail(size)
-    im.save(data['thumbpath'])
-    print('I have saved a thumbnail at ' + data['thumbpath'])
-
-    print('Saving APOD manifest with local images')
-    json.dump(data, open(jsonpath, 'w'))
-    print(jsonpath)
+apodpy(api_key)
 
