@@ -129,10 +129,10 @@ def apodpy(api_key):
         json.dump(data, open(jsonpath + '.noimage', 'w'))
         return fallback(basepath)
 
-        print('Saving APOD manifest with local images')
-        json.dump(data, open(jsonpath, 'w'))
-        print(jsonpath)
-        return
+    print('Saving APOD manifest with local images')
+    json.dump(data, open(jsonpath, 'w'))
+    print(jsonpath)
+    return
 
 
 # APOD API https://api.nasa.gov/api.html#apod
